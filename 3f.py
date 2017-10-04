@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-# Copyright (C) 207, Vi Grey
+# Copyright (C) 2017, Vi Grey
 # All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
@@ -27,82 +27,141 @@
 
 # A polyglot file generator, inspired by PoC||GTFO
 
+
+import os.path
 import sys
 
+VERSION = "0.0.1"
+FILE_EXTENSIONS = [[".zip"],
+                   [".jpg", ".png", ".gif"],
+                   [".pdf"]]
+
+
+# Return True if the file has an extension in FILE_EXTENSIONS
+def extension_valid(ext):
+    global FILE_EXTENSIONS
+    for file_set in FILE_EXTENSIONS:
+        if ext in file_set:
+            return True
+    return False
+
+
+# Check to make sure the input extensions are compatible for a polyglot file
+def input_extensions_compare(ext1, ext2):
+    global FILE_EXTENSIONS
+    # Check to see if one of the input files is a ZIP file
+    if ext1 in FILE_EXTENSIONS[0] or ext2 in FILE_EXTENSIONS[0]:
+        # If both input files are a not a ZIP file
+        if ext1 != ext2:
+            return True
+        print("\x1b[91mOnly one input can be a ZIP file\x1b[0m")
+        return False
+    print("\x1b[91mOne input must be a ZIP file\x1b[0m")
+    return False
+
+
+# Create the polyglot output file from the input file contents
+def create_polyglot_file(content1, ext1, content2, ext2):
+    global FILE_EXTENSIONS
+    # If one of the inputs is an image file
+    if ext1 in FILE_EXTENSIONS[1] or ext2 in FILE_EXTENSIONS[1]:
+        # If the first input is the image file
+        if ext1 not in FILE_EXTENSIONS[0]:
+            # Append ZIP file contents to image file contents
+            return(content1 + content2)
+        # If the second input is the image file
+        else:
+            # Append ZIP file contents to image file contents
+            return(content2 + content1)
+    # Else if one of the inputs is a PDF
+    else:
+        # If the first input file is a PDF
+        if ext1 in FILE_EXTENSIONS[2]:
+            # Get endstream...%%EOF index of PDF file
+            eof = content1.rfind(b"endstream")
+            if eof != -1:
+                # Append ZIP file contents to EOF stripped PDF and append the
+                # EOF content at the end
+                return(content1[:eof] + content2 + content1[eof:])
+            else:
+                print("\x1b[91mImproper PDF file format\x1b[0m")
+                exit(1)
+        # If the second input file is a PDF
+        else:
+            # Get endstream...%%EOF index of PDF file
+            eof = content2.rfind(b"endstream")
+            # If endstream...%%EOF index exists
+            if eof != -1:
+                # Append ZIP file contents to EOF stripped PDF and append the
+                # EOF content at the end
+                return(content2[:eof] + content1 + content2[eof:])
+            else:
+                print("\x1b[91mImproper PDF file format\x1b[0m")
+                exit(1)
+    print("\x1b[91mUnable to combine input files\x1b[0m")
+    exit(1)
+
+# Check if help or version flag was passed as an argument
+if len(sys.argv) >= 2:
+    if sys.argv[1] == "--help" or sys.argv[1] == "-h":
+        print("Usage: python3 3f.py [ OPTIONS ] [ <input1_file> ] " +
+              "[ <input2_file> ] [ <output_path> ]\n\n" +
+              "Options:\n"
+              "  -h, --help        Print Help (this message) and exit\n"
+              "  -v, --version     Print version information and exit\n\n"
+              "Examples:\n" +
+              "  python3 3f.py a.zip b.png o.png\n" +
+              "  python3 3f.py a.pdf b.zip o.pdf\n" +
+              "  python3 3f.py a.gif b.zip o.zip")
+        exit(0)
+    elif sys.argv[1] == "--version" or sys.argv[1] == "-v":
+        print("3F.py " + VERSION)
+        exit(0)
+
+# Close the program if 2 input files and an output path aren't given
 if len(sys.argv) != 4:
-  print("2 input files and 1 output path required")
-  exit(1)
+    print("\x1b[91m2 input files and 1 output path required\x1b[0m")
+    exit(1)
 
-# Test for file extensions of input files
-i1 = sys.argv[1]
-if i1.rfind('.') != len(i1) - 4:
-  print("Invalid extention for first input file")
-  exit(1)
-i1ext = i1[i1.rfind('.') + 1:].lower()
+# Get the 2 inputs and 1 output values
+input1 = sys.argv[1]
+input2 = sys.argv[2]
+output = sys.argv[3]
 
-i2 = sys.argv[2]
-if i2.rfind('.') != len(i2) - 4:
-  print("Invalid extention for first input file")
-  exit(1)
-i2ext = i2[i2.rfind('.') + 1:].lower()
+# Find extension of input1
+input1_extension = os.path.splitext(input1)[1].lower()
+if not extension_valid(input1_extension):
+    print("\x1b[91mInvalid extention for first input file\x1b[0m")
+    exit(1)
 
-o = sys.argv[3]
+# Find extension of input2
+input2_extension = os.path.splitext(input2)[1].lower()
+if not extension_valid(input2_extension):
+    print("\x1b[91mInvalid extention for second input file\x1b[0m")
+    exit(1)
 
-if i1ext in ['jpg', 'png', 'gif'] and i2ext in ['jpg', 'png', 'gif']:
-  print("One input must be a zip file")
-  exit(1)
-elif i1ext == 'pdf' and i2ext == 'pdf':
-  print("One input must be a zip file")
-  exit(1)
-elif i1ext == 'zip' and i2ext == 'zip':
-  print("Unable to combine 2 zip files")
-  exit(1)
-elif not (i1ext in ['jpg', 'png', 'gif', 'pdf', 'zip'] and
-          i2ext in ['jpg', 'png', 'gif', 'pdf', 'zip'] and
-          (i1ext == 'zip' or i2ext == 'zip')):
-  print("Unable to combine input files")
-  exit(1)
+# Check to make sure the inputs have a cooperative set of extensions
+if not input_extensions_compare(input1_extension, input2_extension):
+    exit(1)
 
+# Get contents of input files
 try:
-  in1 = open(i1, "rb")
-  i1contents = in1.read()
-  in1.close()
+    input1_file = open(input1, "rb")
+    input1_contents = input1_file.read()
+    input1_file.close()
+    input2_file = open(input2, "rb")
+    input2_contents = input2_file.read()
+    input2_file.close()
 except:
-  print("Unable to open first input file")
-  exit(1)
+    print("\x1b[91mUnable to open or read an input file\x1b[0m")
+    exit(1)
 
+# Create the output and write to the file
 try:
-  in2 = open(i2, "rb")
-  i2contents = in2.read()
-  in2.close()
+    output_file = open(output, "wb+")
+    output_file.write(create_polyglot_file(input1_contents, input1_extension,
+                                           input2_contents, input2_extension))
+    output_file.close()
 except:
-  print("Unable to open second input file")
-  exit(1)
-
-try:
-  out = open(o, "wb+")
-  if i1ext in ['jpg', 'png', 'gif'] or i2ext in ['jpg', 'png', 'gif']:
-    if i1ext != 'zip':
-      out.write(i1contents + i2contents)
-      print(len(i1contents + i2contents))
-      out.close()
-    else:
-      out.write(i2contents + i1contents)
-  elif i1ext == 'pdf' or i2ext == 'pdf':
-    if i1ext == 'pdf':
-      eof = i1contents.rfind(b'endstream')
-      if eof != -1:
-        out.write(i1contents[:eof] + i2contents + i1contents[eof:])
-      else:
-        print("Improper PDF file format")
-        exit(1)
-    else:
-      eof = i2contents.rfind(b'endstream')
-      if eof != -1:
-        out.write(i2contents[:eof] + i1contents + i2contents[eof:])
-      else:
-        print("Improper PDF file format")
-        exit(1)
-except:
-  print("Unable to create or write output file")
-  exit(1)
+    print("\x1b[91mUnable to create or write output file\x1b[0m")
+    exit(1)
